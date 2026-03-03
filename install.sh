@@ -19,82 +19,63 @@ echo -e "\n${YELLOW}>>> Checking System Requirements...${NC}"
 
 # Docker
 if ! command -v docker &> /dev/null; then
-    echo -e "${RED}${CROSS} Docker not found.${NC} Please install: https://docs.docker.com/get-docker/"; exit 1
+    echo -e "${RED}${CROSS} Docker not found.${NC} Please install Docker first."; exit 1
 else
     echo -e "  ${CHECK} Docker"
 fi
 
-# Python 3
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}${CROSS} Python 3 not found.${NC}"; exit 1
-else
-    echo -e "  ${CHECK} Python 3"
-fi
-
-# Pip 3
-if ! command -v pip3 &> /dev/null; then
-    echo -e "${RED}${CROSS} Pip3 not found.${NC} Installing...";
-    sudo apt-get update -qq && sudo apt-get install -y python3-pip -qq > /dev/null || { echo -e "${RED}Failed to install pip3.${NC}"; exit 1; }
-fi
-echo -e "  ${CHECK} Pip 3"
-
-# Pycolonies
-echo -en "  Installing pycolonies package... "
-pip3 install pycolonies --quiet --break-system-packages 2>/dev/null || pip3 install pycolonies --quiet
-echo -e "\r  ${CHECK} Pycolonies installed.             "
-
-
-# 2. Download the Executor Script
+# 2. Download the Go Binary
 echo -e "\n${YELLOW}>>> Downloading Payload...${NC}"
-RAW_URL="https://raw.githubusercontent.com/ColonyPM/cpm-executor/refs/heads/main/executor.py"
+BIN_URL="https://github.com/ColonyPM/cpm-executor/releases/download/latest/spawn-executor"
 
-if curl -sL "$RAW_URL" -o executor.py; then
-    chmod +x executor.py
-    echo -e "  ${CHECK} executor.py downloaded."
+if curl -sL "$BIN_URL" -o spawn-executor; then
+    chmod +x spawn-executor
+    echo -e "  ${CHECK} spawn-executor downloaded."
 else
-    echo -e "  ${RED}${CROSS} Failed to download script.${NC}"; exit 1
+    echo -e "  ${RED}${CROSS} Failed to download binary.${NC}"; exit 1
 fi
 
-
-# 3. Gather Arguments
+# 3. Gather Arguments (with Readline support for arrows/pasting)
 echo -e "\n${YELLOW}>>> Configuration...${NC}"
 
-# Define a helper function to make reading from a pipe-broken script cleaner
+# Helper function to handle TTY input safely during a curl|bash pipe
 read_input() {
     local prompt=$1
     local var_name=$2
     local silent=$3
 
     if [ "$silent" == "silent" ]; then
-        read -rs -p "$prompt" value </dev/tty
+        # Silent input for passwords, no readline needed here
+        read -r -s -p "$prompt" value </dev/tty
+        echo "" </dev/tty # Print newline after hidden input
     else
-        # -e enables Readline (arrows/history) if available
-        # -r prevents backslashes from acting weird
-        read -re -p "$prompt" value </dev/tty
+        # -e enables Readline (arrows, pasting), -r prevents backslash escaping
+        read -r -e -p "$prompt" value </dev/tty
     fi
     eval "$var_name=\"\$value\""
 }
 
-read_input "Colonies Host: " HOST
-read_input "Port: " PORT
-read_input "Use TLS? (y/n): " USE_TLS
-read_input "Executor Name: " EXE_NAME
+read_input "Colonies Host (e.g., colony.colonypm.xyz): " HOST
+read_input "Port (e.g., 443): " PORT
+read_input "Use TLS / Secure Connection? (y/n): " USE_TLS
+read_input "Executor Name (e.g., worker-01): " EXE_NAME
 read_input "Colony Private Key: " PRVKEY "silent"
-echo "" # Newline after the silent password input
 
-TLS_FLAG=""
+# Handle the -insecure flag based on the TLS question
+INSECURE="true"
 if [[ "$USE_TLS" =~ ^[Yy]$ ]]; then
-    TLS_FLAG="--tls"
+    INSECURE="false"
 fi
 
-
 # 4. Start the Executor
-echo -e "\n${YELLOW}>>> Launching Executor...${NC}"
+echo -e "\n${GREEN}==========================================${NC}"
+echo -e "         LAUNCHING EXECUTOR               "
+echo -e "${GREEN}==========================================${NC}\n"
 
-# Start normally (in foreground, no nohup)
-python3 executor.py \
-    --host "$HOST" \
-    --port "$PORT" \
-    --executor-name "$EXE_NAME" \
-    --prvkey "$PRVKEY" \
-    $TLS_FLAG
+# Run the Go binary directly with the provided flags
+./spawn-executor \
+    -host "$HOST" \
+    -port "$PORT" \
+    -insecure=$INSECURE \
+    -key "$PRVKEY" \
+    -name "$EXE_NAME"
