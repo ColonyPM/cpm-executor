@@ -58,12 +58,12 @@ fi
 
 # 3. Gather Arguments
 echo -e "\n${YELLOW}>>> Configuration...${NC}"
-read -p "Colonies Host (e.g., colony.colonypm.xyz): " HOST
-read -p "Port (e.g., 443): " PORT
-read -p "Use TLS? (y/n): " USE_TLS
-read -p "Executor Name: " EXE_NAME
-read -sp "Colony Private Key: " PRVKEY
-echo "" # Newline after hidden password input
+read -p "Colonies Host (e.g., colony.colonypm.xyz): " HOST </dev/tty
+read -p "Port (e.g., 443): " PORT </dev/tty
+read -p "Use TLS? (y/n): " USE_TLS </dev/tty
+read -p "Executor Name: " EXE_NAME </dev/tty
+read -sp "Colony Private Key: " PRVKEY </dev/tty
+echo ""
 
 TLS_FLAG=""
 if [[ "$USE_TLS" =~ ^[Yy]$ ]]; then
