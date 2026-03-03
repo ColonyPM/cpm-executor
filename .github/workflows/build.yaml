@@ -3,36 +3,31 @@ name: Build and Release
 on:
     push:
         branches:
-            - main # Trigger on every push to main
+            - main # This ensures it runs whenever you push code
 
 permissions:
-    contents: write # Critical: Allows the action to create/update releases
+    contents: write # This is the "Key" that lets the token work
 
 jobs:
-    build-and-release:
+    release:
         runs-on: ubuntu-latest
         steps:
-            - name: Checkout Code
-              uses: actions/checkout@v6
+            - uses: actions/checkout@v6
 
             - name: Set up Go
               uses: actions/setup-go@v6
               with:
                   go-version: "1.21"
 
-            - name: Build Go Binary
-              # We name it specifically so the "Permanent Link" stays consistent
+            - name: Build
+              # We name the file exactly 'spawn-executor' for the permanent link
               run: go build -v -o spawn-executor main.go
 
-            - name: Update Latest Release
-              uses: pipe-cd/actions-gh-release@v2
+            - name: Release
+              uses: softprops/action-gh-release@v2
               with:
-                  # Use a fixed tag name like 'latest' so the link never changes
-                  tag_name: latest
-                  name: "Latest Build"
-                  body: "Automated build from the latest push to main."
-                  draft: false
-                  prerelease: false
+                  tag_name: latest # This keeps the URL permanent
                   files: spawn-executor
+                  generate_release_notes: true
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
