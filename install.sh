@@ -58,12 +58,29 @@ fi
 
 # 3. Gather Arguments
 echo -e "\n${YELLOW}>>> Configuration...${NC}"
-read -p "Colonies Host (e.g., colony.colonypm.xyz): " HOST </dev/tty
-read -p "Port (e.g., 443): " PORT </dev/tty
-read -p "Use TLS? (y/n): " USE_TLS </dev/tty
-read -p "Executor Name: " EXE_NAME </dev/tty
-read -sp "Colony Private Key: " PRVKEY </dev/tty
-echo ""
+
+# Define a helper function to make reading from a pipe-broken script cleaner
+read_input() {
+    local prompt=$1
+    local var_name=$2
+    local silent=$3
+
+    if [ "$silent" == "silent" ]; then
+        read -rs -p "$prompt" value </dev/tty
+    else
+        # -e enables Readline (arrows/history) if available
+        # -r prevents backslashes from acting weird
+        read -re -p "$prompt" value </dev/tty
+    fi
+    eval "$var_name=\"\$value\""
+}
+
+read_input "Colonies Host: " HOST
+read_input "Port: " PORT
+read_input "Use TLS? (y/n): " USE_TLS
+read_input "Executor Name: " EXE_NAME
+read_input "Colony Private Key: " PRVKEY "silent"
+echo "" # Newline after the silent password input
 
 TLS_FLAG=""
 if [[ "$USE_TLS" =~ ^[Yy]$ ]]; then
