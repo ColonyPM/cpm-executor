@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -15,6 +15,14 @@ import (
 	"github.com/colonyos/colonies/pkg/security/crypto"
 	log "github.com/sirupsen/logrus"
 )
+
+func createContainer(imgName string) error {
+	if imgName == "fail-me" {
+		return fmt.Errorf("could not create executor from image '%s'", imgName)
+	}
+
+	return nil
+}
 
 type Executor struct {
 	coloniesServerHost string
@@ -32,141 +40,75 @@ type Executor struct {
 	client             *client.ColoniesClient
 }
 
-type ExecutorOption func(*Executor)
-
-func withColoniesServerHost(host string) ExecutorOption {
-	return func(e *Executor) {
-		e.coloniesServerHost = host
-	}
-}
-
-func withColoniesServerPort(port int) ExecutorOption {
-	return func(e *Executor) {
-		e.coloniesServerPort = port
-	}
-}
-
-func withColoniesInsecure(insecure bool) ExecutorOption {
-	return func(e *Executor) {
-		e.coloniesInsecure = insecure
-	}
-}
-
-func withColonyName(name string) ExecutorOption {
-	return func(e *Executor) {
-		e.colonyName = name
-	}
-}
-
-func withColonyPrvKey(prvkey string) ExecutorOption {
-	return func(e *Executor) {
-		e.colonyPrvKey = prvkey
-	}
-}
-
-func withColonyID(id string) ExecutorOption {
-	return func(e *Executor) {
-		e.colonyID = id
-	}
-}
-
-func withExecutorID(id string) ExecutorOption {
-	return func(e *Executor) {
-		e.executorID = id
-	}
-}
-
-func withExecutorName(name string) ExecutorOption {
-	return func(e *Executor) {
-		e.executorName = name
-	}
-}
-
-func withExecutorType(typ string) ExecutorOption {
-	return func(e *Executor) {
-		e.executorType = typ
-	}
-}
-
-func withExecutorPrvKey(key string) ExecutorOption {
-	return func(e *Executor) {
-		e.executorPrvKey = key
-	}
-}
-
-func (e *Executor) createExecutorwithKey(colonyName string) (*core.Executor, string, string, error) {
-	crypto := crypto.CreateCrypto()
-	executorPrvKey, err := crypto.GeneratePrivateKey()
-	if err != nil {
-		return nil, "", "", err
+func CreateExecutor(
+	host string,
+	port int,
+	insecure bool,
+	colonyName string,
+	colonyPrvKey string,
+	executorName string,
+	executorType string,
+) (*Executor, error) {
+	e := &Executor{
+		coloniesServerHost: host,
+		coloniesServerPort: port,
+		coloniesInsecure:   insecure,
+		colonyName:         colonyName,
+		colonyPrvKey:       colonyPrvKey,
+		executorName:       executorName,
+		executorType:       executorType,
 	}
 
-	executorID, err := crypto.GenerateID(executorPrvKey)
-	if err != nil {
-		return nil, "", "", err
-	}
-
-	executor := core.CreateExecutor(executorID, "cpm-anchor", e.executorName, colonyName, time.Now(), time.Now())
-
-	return executor, executorID, executorPrvKey, nil
-}
-
-func CreateExecutor(opts ...ExecutorOption) (*Executor, error) {
-	e := &Executor{}
-	for _, opt := range opts {
-		opt(e)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	e.ctx = ctx
 	e.cancel = cancel
 
-	sigc := make(chan os.Signal)
-	signal.Notify(sigc, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT, syscall.SIGSEGV)
 	go func() {
-		<-sigc
+		<-ctx.Done()
 		e.Shutdown()
-		os.Exit(1)
+		os.Exit(0)
 	}()
 
 	e.client = client.CreateColoniesClient(e.coloniesServerHost, e.coloniesServerPort, e.coloniesInsecure, false)
 
-	if e.colonyPrvKey != "" {
-		spec, executorID, executorPrvKey, err := e.createExecutorwithKey(e.colonyName)
-		if err != nil {
-			return nil, err
-		}
-		e.executorID = executorID
-		e.executorPrvKey = executorPrvKey
+	crypto := crypto.CreateCrypto()
 
-		_, err = e.client.AddExecutor(spec, e.colonyPrvKey)
-		if err != nil {
-			return nil, err
-		}
-		err = e.client.ApproveExecutor(e.colonyName, e.executorName, e.colonyPrvKey)
-		if err != nil {
-			return nil, err
-		}
-
-		function := &core.Function{ExecutorName: e.executorName, ColonyName: e.colonyName, FuncName: "sleep"}
-
-		_, err = e.client.AddFunction(function, e.executorPrvKey)
-		log.WithFields(log.Fields{"ExecutorID": e.executorID}).Info("Self-registered")
+	executorPrvKey, err := crypto.GeneratePrivateKey()
+	if err != nil {
+		return nil, err
 	}
+
+	executorID, err := crypto.GenerateID(executorPrvKey)
+	if err != nil {
+		return nil, err
+	}
+
+	e.executorPrvKey = executorPrvKey
+	e.executorID = executorID
+
+	spec := core.CreateExecutor(e.executorID, e.executorType, e.executorName, e.colonyName, time.Now(), time.Now())
+	if _, err = e.client.AddExecutor(spec, e.colonyPrvKey); err != nil {
+		return nil, err
+	}
+
+	if err = e.client.ApproveExecutor(e.colonyName, e.executorName, e.colonyPrvKey); err != nil {
+		return nil, err
+	}
+
 	return e, nil
 }
 
 func (e *Executor) Shutdown() error {
 	log.Info("Shutting down")
-	if e.colonyPrvKey != "" {
-		err := e.client.RemoveExecutor(e.colonyName, e.executorName, e.colonyPrvKey)
-		if err != nil {
-			log.WithFields(log.Fields{"ExecutorID": e.executorID}).Warning("Failed to deregister")
-		}
 
-		log.WithFields(log.Fields{"ExecutorID": e.executorID}).Info("Deregistered")
+	err := e.client.RemoveExecutor(e.colonyName, e.executorName, e.colonyPrvKey)
+	if err != nil {
+		log.WithFields(log.Fields{"ExecutorID": e.executorID}).Warning("Failed to deregister")
 	}
+
+	log.WithFields(log.Fields{"ExecutorID": e.executorID}).Info("Deregistered")
 	e.cancel()
+
 	return nil
 }
 
@@ -176,7 +118,7 @@ func (e *Executor) ServeForEver() error {
 		if err != nil {
 			var coloniesError *core.ColoniesError
 			if errors.As(err, &coloniesError) {
-				if coloniesError.Status == 404 { // No processes can be selected for executor
+				if coloniesError.Status == 404 {
 					log.Info(err)
 					continue
 				}
@@ -192,32 +134,35 @@ func (e *Executor) ServeForEver() error {
 		log.WithFields(log.Fields{"ProcessID": process.ID, "ExecutorID": e.executorID}).Info("Assigned process to executor")
 
 		funcName := process.FunctionSpec.FuncName
-		if funcName == "sleep" {
+		if funcName == "createExecutor" {
 			if len(process.FunctionSpec.Args) != 1 {
-				log.Info(err)
-				err = e.client.Fail(process.ID, []string{"Invalid argument"}, e.executorPrvKey)
+				if err = e.client.Fail(process.ID, []string{"missing imgName argument"}, e.executorPrvKey); err != nil {
+					log.Info(err)
+				}
+
+				continue
 			}
-			timeToSleepIf := process.FunctionSpec.Args[0]
-			timeToSleepStr, ok := timeToSleepIf.(string)
+
+			imgName, ok := process.FunctionSpec.Args[0].(string)
 			if !ok {
-				log.Info(err)
-				err = e.client.Fail(process.ID, []string{"Invalid argument, not string"}, e.executorPrvKey)
-			}
-			timeToSleep, err := strconv.Atoi(timeToSleepStr)
-			if err != nil {
-				log.Info(err)
-				err = e.client.Fail(process.ID, []string{"Invalid argument, could not convert to int"}, e.executorPrvKey)
+				if err = e.client.Fail(process.ID, []string{"could not convert imgName argument to a string"}, e.executorPrvKey); err != nil {
+					log.Info(err)
+				}
+
+				continue
 			}
 
-			log.WithFields(log.Fields{"TimeToSleep": timeToSleep}).Info("Executing sleep function")
+			var result = fmt.Sprintf("created executor '%s'", imgName)
+			if err := createContainer(imgName); err != nil {
+				result = err.Error()
+			}
 
-			time.Sleep(time.Duration(timeToSleep) * time.Millisecond)
-			err = e.client.Close(process.ID, e.executorPrvKey)
+			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
 
 			log.Info("Closing process")
 		} else {
 			log.WithFields(log.Fields{"ProcessID": process.ID, "ExecutorID": e.executorID, "FuncName": funcName}).Info("Unsupported function")
-			err = e.client.Fail(process.ID, []string{"Unsupported function: " + funcName}, e.executorPrvKey)
+			err = e.client.Fail(process.ID, []string{fmt.Sprintf("unsupported function '%s'", funcName)}, e.executorPrvKey)
 			log.Info(err)
 		}
 	}
@@ -225,37 +170,37 @@ func (e *Executor) ServeForEver() error {
 
 func main() {
 	var (
-		host           string
-		port           int
-		insecure       bool
-		executorPrvKey string
-		executorName   string
+		host         string
+		port         int
+		insecure     bool
+		colonyPrvKey string
+		executorName string
 	)
 
 	flag.StringVar(&host, "host", "localhost", "Colonies server host")
 	flag.IntVar(&port, "port", 50080, "Colonies server port")
 	flag.BoolVar(&insecure, "insecure", true, "Disable TLS")
-	flag.StringVar(&executorPrvKey, "key", "", "Executor private key")
-	flag.StringVar(&executorName, "name", "docker-spawn-executor", "Executor name")
-
+	flag.StringVar(&colonyPrvKey, "key", "", "Colony private key")
+	flag.StringVar(&executorName, "name", "", "Executor name")
 	flag.Parse()
 
 	e, err := CreateExecutor(
-		withColoniesServerHost(host),
-		withColoniesServerPort(port),
-		withColoniesInsecure(insecure),
-		withColonyPrvKey(executorPrvKey),
-		withExecutorName(executorName),
-		withColonyName("dev"),
-		withExecutorID("1234"),
-		withExecutorType("cpm-anchor"),
+		host,
+		port,
+		insecure,
+		"dev",
+		colonyPrvKey,
+		executorName,
+		"cpm-anchor",
 	)
 
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to initialize executor: %v", err)
 	}
 
+	fmt.Println("Anchor started...")
+
 	if err := e.ServeForEver(); err != nil {
-		panic(err)
+		log.Fatalf("Runtime error: %v", err)
 	}
 }
