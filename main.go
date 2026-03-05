@@ -22,6 +22,7 @@ import (
 )
 
 func createContainer(imgName string) error {
+	fmt.Println("test..........")
 	ctx := context.Background()
 
 	// Initialize the Moby client
