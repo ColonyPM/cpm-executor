@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,6 +22,14 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/google/uuid"
+)
+
+var (
+	host         string
+	port         int
+	insecure     bool
+	colonyPrvKey string
+	executorName string
 )
 
 func createContainer(imgName string) (string, error) {
@@ -45,6 +54,13 @@ func createContainer(imgName string) (string, error) {
 	resp, err := cli.ContainerCreate(ctx,
 		&container.Config{
 			Image: imgName,
+			Cmd: []string{
+				host,
+				strconv.Itoa(port),
+				strconv.FormatBool(insecure),
+				colonyPrvKey,
+				containerName,
+			},
 		},
 		&container.HostConfig{},
 		nil,
@@ -201,7 +217,13 @@ func (e *Executor) ServeForEver() error {
 
 			fmt.Println("RESULT: " + result)
 
-			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
+			if err := e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey); err != nil {
+				log.Error(err)
+				if err = e.client.Fail(process.ID, []string{fmt.Sprintf("unsupported function '%s'", funcName)}, e.executorPrvKey); err != nil {
+					log.Error()
+					os.Exit(1)
+				}
+			}
 
 			log.Info("Closing process")
 		} else {
@@ -213,14 +235,6 @@ func (e *Executor) ServeForEver() error {
 }
 
 func main() {
-	var (
-		host         string
-		port         int
-		insecure     bool
-		colonyPrvKey string
-		executorName string
-	)
-
 	flag.StringVar(&host, "host", "localhost", "Colonies server host")
 	flag.IntVar(&port, "port", 50080, "Colonies server port")
 	flag.BoolVar(&insecure, "insecure", true, "Disable TLS")
