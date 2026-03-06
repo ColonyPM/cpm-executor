@@ -212,7 +212,10 @@ func (e *Executor) ServeForEver() error {
 
 			result, err := createContainer(imgName)
 			if err != nil {
-				result = err.Error()
+				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
+					log.Info(err)
+					os.Exit(1)
+				}
 			}
 
 			fmt.Println("RESULT: " + result)
