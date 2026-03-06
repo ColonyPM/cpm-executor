@@ -45,7 +45,7 @@ func createContainer(imgName string) error {
 		&container.HostConfig{},
 		nil,
 		nil,
-		imgName+"-lmaooo",
+		"anchor-spawned-container",
 	)
 	if err != nil {
 		log.Error(err)
