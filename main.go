@@ -201,7 +201,7 @@ func (e *Executor) ServeForEver() error {
 				continue
 			}
 
-			_, ok := process.FunctionSpec.Args[0].(string)
+			imgName, ok := process.FunctionSpec.Args[0].(string)
 			if !ok {
 				if err = e.client.Fail(process.ID, []string{"could not convert imgName argument to a string"}, e.executorPrvKey); err != nil {
 					log.Info(err)
@@ -210,20 +210,18 @@ func (e *Executor) ServeForEver() error {
 				continue
 			}
 
-			/*result, err := createContainer(imgName)
+			result, err := createContainer(imgName)
 			if err != nil {
 				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
 					log.Info(err)
 					os.Exit(1)
 				}
-			}*/
+			}
 
-			time.Sleep(10 * time.Second)
-
-			fmt.Println("RESULT: " + "SYIBBED")
+			fmt.Println("RESULT: " + result)
 
 			fmt.Printf("Status before closing: %d", process.State)
-			err = e.client.CloseWithOutput(process.ID, []any{"SYUBBED"}, e.executorPrvKey)
+			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
 			fmt.Println(err)
 
 			/*
