@@ -33,11 +33,13 @@ func createContainer(imgName string) error {
 	fmt.Printf("Pulling %s...\n", imgName)
 	reader, err := cli.ImagePull(ctx, imgName, image.PullOptions{})
 	if err != nil {
+		fmt.Println("1")
 		return err
 	}
 	io.Copy(os.Stdout, reader)
 	reader.Close()
 
+	fmt.Println("1.1")
 	resp, err := cli.ContainerCreate(ctx,
 		&container.Config{
 			Image: imgName,
@@ -48,10 +50,13 @@ func createContainer(imgName string) error {
 		imgName+"-lmaooo",
 	)
 	if err != nil {
+		fmt.Println("2")
 		return err
 	}
 
+	fmt.Println("2.2")
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		fmt.Println("3")
 		return err
 	}
 
