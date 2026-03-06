@@ -218,10 +218,10 @@ func (e *Executor) ServeForEver() error {
 					log.Info(err)
 					os.Exit(1)
 				}
+				fmt.Println("WELL FUCK")
 			}
 
 			fmt.Println("RESULT: " + result)
-
 			fmt.Println("3", process.State, process)
 			if err := e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey); err != nil {
 				fmt.Println("4", process.State, process)
