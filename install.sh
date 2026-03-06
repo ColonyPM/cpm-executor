@@ -35,37 +35,30 @@ else
     echo -e "  ${RED}${CROSS} Failed to download binary.${NC}"; exit 1
 fi
 
-# 3. Gather Arguments (with Readline support for arrows/pasting)
-echo -e "\n${YELLOW}>>> Configuration...${NC}"
+# 3. Configuration from Environment Variables
+echo -e "\n${YELLOW}>>> Checking Configuration...${NC}"
 
-# Helper function to handle TTY input safely during a curl|bash pipe
-read_input() {
-    local prompt=$1
-    local var_name=$2
-    local silent=$3
-
-    if [ "$silent" == "silent" ]; then
-        # Silent input for passwords, no readline needed here
-        read -r -s -p "$prompt" value </dev/tty
-        echo "" </dev/tty # Print newline after hidden input
-    else
-        # -e enables Readline (arrows, pasting), -r prevents backslash escaping
-        read -r -e -p "$prompt" value </dev/tty
+# Ensure no defaults are used and all variables are present
+MISSING_VARS=false
+for var in HOST PORT INSECURE EXE_NAME PRVKEY; do
+    if [ -z "${!var}" ]; then
+        echo -e "  ${RED}${CROSS} Missing required environment variable: $var${NC}"
+        MISSING_VARS=true
     fi
-    eval "$var_name=\"\$value\""
-}
+done
 
-read_input "Colonies Host (e.g., colony.colonypm.xyz): " HOST
-read_input "Port (e.g., 443): " PORT
-read_input "Use TLS / Secure Connection? (y/n): " USE_TLS
-read_input "Executor Name (e.g., worker-01): " EXE_NAME
-read_input "Colony Private Key: " PRVKEY "silent"
-
-# Handle the -insecure flag based on the TLS question
-INSECURE="true"
-if [[ "$USE_TLS" =~ ^[Yy]$ ]]; then
-    INSECURE="false"
+if [ "$MISSING_VARS" = true ]; then
+    echo -e "\n${RED}Error: Execution aborted. Please provide all required environment variables.${NC}"
+    echo "Example: HOST=colony.colonypm.xyz PORT=443 INSECURE=false EXE_NAME=worker-01 PRVKEY=your_key ./setup.sh"
+    exit 1
 fi
+
+# Print the values being used
+echo -e "  ${CHECK} Host: $HOST"
+echo -e "  ${CHECK} Port: $PORT"
+echo -e "  ${CHECK} Insecure: $INSECURE"
+echo -e "  ${CHECK} Name: $EXE_NAME"
+echo -e "  ${CHECK} Key: ********"
 
 # 4. Start the Executor
 echo -e "\n${GREEN}==========================================${NC}"
@@ -76,6 +69,6 @@ echo -e "${GREEN}==========================================${NC}\n"
 ./spawn-executor \
     -host "$HOST" \
     -port "$PORT" \
-    -insecure=$INSECURE \
+    -insecure="$INSECURE" \
     -key "$PRVKEY" \
     -name "$EXE_NAME"
