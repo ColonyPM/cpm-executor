@@ -220,7 +220,9 @@ func (e *Executor) ServeForEver() error {
 
 			fmt.Println("RESULT: " + result)
 
-			err = e.client.CloseWithOutput(process.ID, []any{"LMAOOOOOOOOO"}, e.executorPrvKey)
+			output := make([]any, 1)
+			output[0] = result
+			err = e.client.CloseWithOutput(process.ID, output, e.executorPrvKey)
 			fmt.Println(err)
 
 			/*
