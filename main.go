@@ -222,7 +222,7 @@ func (e *Executor) ServeForEver() error {
 
 			if err := e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey); err != nil {
 				log.Error(err)
-				if err = e.client.Fail(process.ID, []string{fmt.Sprintf("unsupported function '%s'", funcName)}, e.executorPrvKey); err != nil {
+				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
 					log.Error()
 					os.Exit(1)
 				}
