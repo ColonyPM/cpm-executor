@@ -19,9 +19,11 @@ import (
 	dc "github.com/docker/docker/client"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/google/uuid"
 )
 
-func createContainer(imgName string) error {
+func createContainer(imgName string) (string, error) {
 	ctx := context.Background()
 
 	cli, err := dc.NewClientWithOpts(dc.FromEnv, dc.WithAPIVersionNegotiation())
@@ -33,10 +35,12 @@ func createContainer(imgName string) error {
 	fmt.Printf("Pulling %s...\n", imgName)
 	reader, err := cli.ImagePull(ctx, imgName, image.PullOptions{})
 	if err != nil {
-		return err
+		return "", err
 	}
 	io.Copy(os.Stdout, reader)
 	reader.Close()
+
+	containerName := uuid.New().String()
 
 	resp, err := cli.ContainerCreate(ctx,
 		&container.Config{
@@ -45,21 +49,21 @@ func createContainer(imgName string) error {
 		&container.HostConfig{},
 		nil,
 		nil,
-		"anchor-spawned-container",
+		containerName,
 	)
 	if err != nil {
 		log.Error(err)
-		return err
+		return "", err
 	}
 
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		fmt.Println("3")
-		return err
+		return "", err
 	}
 
 	fmt.Printf("Success! Container %s is running.\n", resp.ID)
 
-	return nil
+	return resp.ID, nil
 }
 
 type Executor struct {
@@ -190,12 +194,10 @@ func (e *Executor) ServeForEver() error {
 				continue
 			}
 
-			var result = fmt.Sprintf("created executor '%s'", imgName)
-			if err := createContainer(imgName); err != nil {
+			result, err := createContainer(imgName)
+			if err != nil {
 				result = err.Error()
 			}
-
-			fmt.Println("RESULT: " + result)
 
 			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
 
