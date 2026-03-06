@@ -219,13 +219,20 @@ func (e *Executor) ServeForEver() error {
 			}
 
 			fmt.Println("RESULT: " + result)
-			if err := e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey); err != nil {
-				log.Error(err)
-				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
-					log.Error(err)
-					os.Exit(1)
-				}
-			}
+
+			fmt.Printf("Status before closing: %d", process.State)
+			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
+			fmt.Println(err)
+
+			/*
+				 * 			if err := e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey); err != nil {
+								log.Error(err)
+								if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
+									log.Error(err)
+									os.Exit(1)
+								}
+							}
+			*/
 
 			log.Info("Closing process")
 		} else {
