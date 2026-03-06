@@ -199,6 +199,8 @@ func (e *Executor) ServeForEver() error {
 				result = err.Error()
 			}
 
+			fmt.Println("RESULT: " + result)
+
 			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
 
 			log.Info("Closing process")
