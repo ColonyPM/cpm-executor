@@ -218,6 +218,8 @@ func (e *Executor) ServeForEver() error {
 				}
 			}*/
 
+			time.Sleep(10 * time.Second)
+
 			fmt.Println("RESULT: " + "SYIBBED")
 
 			fmt.Printf("Status before closing: %d", process.State)
