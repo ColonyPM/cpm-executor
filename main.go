@@ -32,7 +32,7 @@ var (
 	executorName string
 )
 
-func createContainer(imgName string) (string, error) {
+func createContainer(_ *client.ColoniesClient, imgName string) (string, string, error) {
 	ctx := context.Background()
 
 	cli, err := dc.NewClientWithOpts(dc.FromEnv, dc.WithAPIVersionNegotiation())
@@ -44,7 +44,7 @@ func createContainer(imgName string) (string, error) {
 	fmt.Printf("Pulling %s...\n", imgName)
 	reader, err := cli.ImagePull(ctx, imgName, image.PullOptions{})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	io.Copy(os.Stdout, reader)
 	reader.Close()
@@ -69,17 +69,14 @@ func createContainer(imgName string) (string, error) {
 	)
 	if err != nil {
 		log.Error(err)
-		return "", err
+		return "", "", err
 	}
 
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		fmt.Println("3")
-		return "", err
+		return "", "", err
 	}
 
-	fmt.Printf("Success! Container %s is running.\n", resp.ID)
-
-	return resp.ID, nil
+	return containerName, resp.ID, nil
 }
 
 type Executor struct {
@@ -210,7 +207,7 @@ func (e *Executor) ServeForEver() error {
 				continue
 			}
 
-			result, err := createContainer(imgName)
+			containerName, containerID, err := createContainer(e.client, imgName)
 			if err != nil {
 				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
 					log.Info(err)
@@ -218,9 +215,7 @@ func (e *Executor) ServeForEver() error {
 				}
 			}
 
-			fmt.Println("RESULT: " + result)
-
-			err = e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey)
+			err = e.client.CloseWithOutput(process.ID, []any{containerName, containerID}, e.executorPrvKey)
 			fmt.Println(err)
 
 			/*
