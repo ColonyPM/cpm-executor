@@ -180,12 +180,15 @@ func CreateExecutor(
 func (e *Executor) Shutdown() error {
 	log.Info("Shutting down")
 
-	err := e.client.RemoveExecutor(e.colonyName, e.executorName, e.colonyPrvKey)
-	if err != nil {
-		log.WithFields(log.Fields{"ExecutorID": e.executorID}).Warning("Failed to deregister")
+	if err := e.client.RemoveExecutor(e.colonyName, e.executorName, e.colonyPrvKey); err != nil {
+		log.WithFields(log.Fields{"ExecutorID": e.executorID}).Warning("Failed to remove")
 	}
 
-	log.WithFields(log.Fields{"ExecutorID": e.executorID}).Info("Deregistered")
+	if err := e.client.RejectExecutor(e.colonyName, e.executorName, e.colonyPrvKey); err != nil {
+		log.WithFields(log.Fields{"ExecutorID": e.executorID}).Warning("Failed to reject")
+
+	}
+	log.WithFields(log.Fields{"ExecutorID": e.executorID}).Info("Removed & Rejected")
 	e.cancel()
 
 	return nil
