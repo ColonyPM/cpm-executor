@@ -79,6 +79,27 @@ func createContainer(_ *client.ColoniesClient, imgName string) (string, string, 
 	return containerName, resp.ID, nil
 }
 
+func removeContainer(_ *client.ColoniesClient, containerID string) error {
+	ctx := context.Background()
+
+	cli, err := dc.NewClientWithOpts(dc.FromEnv, dc.WithAPIVersionNegotiation())
+	if err != nil {
+		panic(err)
+	}
+	defer cli.Close()
+
+	err = cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		RemoveVolumes: true,
+		RemoveLinks:   true,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type Executor struct {
 	coloniesServerHost string
 	coloniesServerPort int
@@ -218,15 +239,35 @@ func (e *Executor) ServeForEver() error {
 			err = e.client.CloseWithOutput(process.ID, []any{containerName, containerID}, e.executorPrvKey)
 			fmt.Println(err)
 
-			/*
-				 * 			if err := e.client.CloseWithOutput(process.ID, []any{result}, e.executorPrvKey); err != nil {
-								log.Error(err)
-								if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
-									log.Error(err)
-									os.Exit(1)
-								}
-							}
-			*/
+			log.Info("Closing process")
+		} else if funcName == "removeExecutor" {
+			if len(process.FunctionSpec.Args) != 1 {
+				if err = e.client.Fail(process.ID, []string{"missing containerID argument"}, e.executorPrvKey); err != nil {
+					log.Info(err)
+				}
+
+				continue
+			}
+
+			containerID, ok := process.FunctionSpec.Args[0].(string)
+			if !ok {
+				if err = e.client.Fail(process.ID, []string{"could not convert containerID argument to a string"}, e.executorPrvKey); err != nil {
+					log.Info(err)
+				}
+
+				continue
+			}
+
+			err := removeContainer(e.client, containerID)
+			if err != nil {
+				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
+					log.Info(err)
+					os.Exit(1)
+				}
+			}
+
+			err = e.client.Close(process.ID, e.executorPrvKey)
+			fmt.Println(err)
 
 			log.Info("Closing process")
 		} else {
