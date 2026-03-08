@@ -88,10 +88,14 @@ func removeContainer(_ *client.ColoniesClient, containerID string) error {
 	}
 	defer cli.Close()
 
+	err = cli.ContainerStop(ctx, containerID, container.StopOptions{})
+	if err != nil {
+		return err
+	}
+
 	err = cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		RemoveVolumes: true,
 	})
-
 	if err != nil {
 		return err
 	}
