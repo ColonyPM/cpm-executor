@@ -193,7 +193,7 @@ func (e *Executor) Shutdown() error {
 
 func (e *Executor) ServeForEver() error {
 	for {
-		process, err := e.client.AssignWithContext(e.colonyName, 100, e.ctx, "", "", e.executorPrvKey)
+		process, err := e.client.AssignWithContext(e.colonyName, 5, e.ctx, "", "", e.executorPrvKey)
 		if err != nil {
 			var coloniesError *core.ColoniesError
 			if errors.As(err, &coloniesError) {
