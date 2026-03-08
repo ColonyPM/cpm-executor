@@ -90,7 +90,6 @@ func removeContainer(_ *client.ColoniesClient, containerID string) error {
 
 	err = cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		RemoveVolumes: true,
-		RemoveLinks:   true,
 	})
 
 	if err != nil {
