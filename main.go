@@ -41,7 +41,6 @@ func createContainer(_ *client.ColoniesClient, imgName string) (string, string, 
 	}
 	defer cli.Close()
 
-	fmt.Printf("Pulling %s...\n", imgName)
 	reader, err := cli.ImagePull(ctx, imgName, image.PullOptions{})
 	if err != nil {
 		return "", "", err
@@ -193,6 +192,7 @@ func (e *Executor) Shutdown() error {
 
 func (e *Executor) ServeForEver() error {
 	for {
+		fmt.Printf("Waiting for process")
 		process, err := e.client.AssignWithContext(e.colonyName, 5, e.ctx, "", "", e.executorPrvKey)
 		if err != nil {
 			var coloniesError *core.ColoniesError
@@ -210,7 +210,7 @@ func (e *Executor) ServeForEver() error {
 			continue
 		}
 
-		log.WithFields(log.Fields{"ProcessID": process.ID, "ExecutorID": e.executorID}).Info("Assigned process to executor")
+		fmt.Printf("Got process (ID: %.10s...)\n", process.ID)
 
 		funcName := process.FunctionSpec.FuncName
 		if funcName == "createExecutor" {
@@ -231,18 +231,23 @@ func (e *Executor) ServeForEver() error {
 				continue
 			}
 
+			fmt.Printf("Creating executor '%s'\n", imgName)
 			containerName, containerID, err := createContainer(e.client, imgName)
 			if err != nil {
+				fmt.Printf("Failed to create executor '%s'\n", imgName)
 				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
 					log.Info(err)
 					os.Exit(1)
 				}
 			}
+			fmt.Printf("Created executor '%s'\n", imgName)
 
 			err = e.client.CloseWithOutput(process.ID, []any{containerName, containerID}, e.executorPrvKey)
-			fmt.Println(err)
+			if err != nil {
+				fmt.Println(err)
+			}
 
-			log.Info("Closing process")
+			fmt.Printf("Closing process")
 		} else if funcName == "removeExecutor" {
 			if len(process.FunctionSpec.Args) != 1 {
 				if err = e.client.Fail(process.ID, []string{"missing containerID argument"}, e.executorPrvKey); err != nil {
@@ -261,18 +266,24 @@ func (e *Executor) ServeForEver() error {
 				continue
 			}
 
+			fmt.Printf("Removing executor (ContainerID: %.10s...)\n", containerID)
 			err := removeContainer(e.client, containerID)
 			if err != nil {
+				fmt.Println(err)
 				if err = e.client.Fail(process.ID, []string{err.Error()}, e.executorPrvKey); err != nil {
 					log.Info(err)
 					os.Exit(1)
 				}
 			}
 
-			err = e.client.Close(process.ID, e.executorPrvKey)
-			fmt.Println(err)
+			fmt.Printf("Removed executor (ContainerID: %.10s...)\n", containerID)
 
-			log.Info("Closing process")
+			err = e.client.Close(process.ID, e.executorPrvKey)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			fmt.Printf("Closing process")
 		} else {
 			log.WithFields(log.Fields{"ProcessID": process.ID, "ExecutorID": e.executorID, "FuncName": funcName}).Info("Unsupported function")
 			err = e.client.Fail(process.ID, []string{fmt.Sprintf("unsupported function '%s'", funcName)}, e.executorPrvKey)
